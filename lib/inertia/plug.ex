@@ -94,6 +94,7 @@ defmodule Inertia.Plug do
         |> detect_reset()
         |> detect_except_once_props()
         |> detect_scroll_merge_intent()
+        |> detect_precognition()
         |> convert_redirects()
         |> handle_empty_response()
         |> check_version()
@@ -150,6 +151,13 @@ defmodule Inertia.Plug do
       end
 
     put_private(conn, :inertia_scroll_merge_intent, intent)
+  end
+
+  defp detect_precognition(conn) do
+    case get_req_header(conn, "precognition") do
+      ["true"] -> put_private(conn, :inertia_precognition, true)
+      _ -> conn
+    end
   end
 
   defp get_partial_only(conn) do

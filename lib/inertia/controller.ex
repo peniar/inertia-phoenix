@@ -78,6 +78,66 @@ defmodule Inertia.Controller do
     defstruct [:is_partial, :only, :except, :reset, :except_once_props, :opts]
   end
 
+  defmodule Precognition do
+    @moduledoc """
+      A very simple implementation of precognition for real-time validation
+
+      Requires further restructuring or testing
+
+      # lib/my_app_web.ex
+      defmodule MyAppWeb do
+      def controller do
+        quote do
+          use Phoenix.Controller, namespace: MyAppWeb
+
+     +    import Inertia.Controller
+     +    import Inertia.Controller.Precognition
+        end
+      end
+    """
+    defguard is_precognition(conn)
+             when is_map_key(conn.private, :inertia_precognition) and conn.private.inertia_precognition == true
+
+    @doc """
+    ## Usage with Ecto.Changeset
+
+    ```elixir
+    # In your controller action
+    def create(conn, %{"post" => post_params}) when is_precognition(conn) do
+      precognition(conn, Posts.changeset(%Post{}, post_params))
+    end
+    """
+    def precognition(conn, %Ecto.Changeset{} = changeset) do
+      if get_req_header(conn, "precognition") == ["true"] do
+        case changeset.valid? do
+          true ->
+            conn
+            |> put_resp_header("Precognition", "true")
+            |> put_resp_header("Precognition-Success", "true")
+            |> send_resp(:no_content, "")
+            |> halt()
+
+          false ->
+            validate_only =
+              conn
+              |> get_req_header("precognition-validate-only")
+              |> Enum.flat_map(&String.split(String.trim(&1), ",", trim: true))
+
+            errors =
+              changeset
+              |> Inertia.Errors.to_errors()
+              |> Map.reject(fn {k, _} -> to_string(k) not in validate_only end)
+
+            conn
+            |> put_resp_header("Precognition", "true")
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: errors})
+            |> halt()
+        end
+      end
+    end
+  end
+
   @type raw_prop_key :: atom() | String.t()
 
   @opaque optional() :: {:optional, fun()}
